@@ -1,7 +1,6 @@
 "use client";
 
 import { useSession } from "@/lib/auth-client";
-import { useEffect } from "react";
 import { motion } from "framer-motion";
 
 import { useFetchProjects } from "@/hooks";
@@ -15,15 +14,11 @@ import {
 
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const { projects, loading, fetchProjects, stats, completionRate } =
+  const { projects, loading, stats, completionRate } =
     useFetchProjects();
 
-  useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects]);
-
   const userName = session?.user?.name?.split(" ")[0];
-  const recentProjects = projects.slice(0, 5);
+  const recentProjects = (projects || []).slice(0, 5);
 
   return (
     <motion.div

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, use } from "react";
+import { use } from "react";
 import Link from "next/link";
 import { Loader2, AlertCircle } from "lucide-react";
 
@@ -27,20 +27,18 @@ export default function ProjectDetailPage({
 }) {
   const { id } = use(params);
   const {
-    project,
+    project: projectData,
     loading,
     actionLoading,
     error,
-    fetchProject,
     handleResearch,
     handleVoiceoverUpload,
     handleGenerateImages,
     handleGenerateVideo,
   } = useProjectActions(id);
 
-  useEffect(() => {
-    fetchProject();
-  }, [fetchProject]);
+  // Extract project from response data
+  const project = projectData?.project;
 
   if (loading) {
     return (

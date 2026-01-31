@@ -15,7 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { Project } from "@/types";
+import { Project } from "@/lib/schemas";
 import { STATUS_CONFIG } from "@/constants";
 
 interface RecentProjectsProps {

@@ -1,68 +1,57 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Project } from "@/types";
+import {
+  useGetProjectQuery,
+  useGenerateResearchMutation,
+  useUploadVoiceoverMutation,
+  useGenerateImagesMutation,
+  useGenerateVideoMutation,
+} from "@/lib/store/api/projectsApi";
 
 interface UseProjectActionsReturn {
-  project: Project | null;
+  project: ReturnType<typeof useGetProjectQuery>["data"];
   loading: boolean;
   actionLoading: string | null;
   error: string;
-  fetchProject: () => Promise<void>;
-  handleResearch: () => Promise<void>;
+  refetch: () => void;
+  handleResearch: (options?: { duration?: string; tone?: string }) => Promise<void>;
   handleVoiceoverUpload: (file: File) => Promise<void>;
-  handleGenerateImages: () => Promise<void>;
-  handleGenerateVideo: () => Promise<void>;
+  handleGenerateImages: (options?: { provider?: "pexels" | "segmind"; styleGuide?: string }) => Promise<void>;
+  handleGenerateVideo: (options?: { subtitleStyle?: unknown }) => Promise<void>;
   setError: (error: string) => void;
 }
 
 export function useProjectActions(projectId: string): UseProjectActionsReturn {
-  const [project, setProject] = useState<Project | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: projectData, isLoading, refetch } = useGetProjectQuery(projectId);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const fetchProject = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/projects/${projectId}`);
-      const data = await res.json();
+  const [generateResearch] = useGenerateResearchMutation();
+  const [uploadVoiceover] = useUploadVoiceoverMutation();
+  const [generateImages] = useGenerateImagesMutation();
+  const [generateVideo] = useGenerateVideoMutation();
 
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to fetch project");
+  const handleResearch = useCallback(
+    async (options?: { duration?: string; tone?: string }) => {
+      setActionLoading("research");
+      setError("");
+
+      try {
+        await generateResearch({
+          id: projectId,
+          duration: options?.duration || "60s",
+          tone: options?.tone || "educational",
+        }).unwrap();
+        await refetch();
+      } catch (err: any) {
+        setError(err?.data?.error || err?.message || "Research failed");
+      } finally {
+        setActionLoading(null);
       }
-
-      setProject(data.project);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load project");
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
-  const handleResearch = useCallback(async () => {
-    setActionLoading("research");
-    setError("");
-
-    try {
-      const res = await fetch(`/api/projects/${projectId}/research`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ duration: "60s", tone: "educational" }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Research failed");
-      }
-
-      await fetchProject();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Research failed");
-    } finally {
-      setActionLoading(null);
-    }
-  }, [projectId, fetchProject]);
+    },
+    [projectId, generateResearch, refetch]
+  );
 
   const handleVoiceoverUpload = useCallback(
     async (file: File) => {
@@ -70,86 +59,67 @@ export function useProjectActions(projectId: string): UseProjectActionsReturn {
       setError("");
 
       try {
-        const formData = new FormData();
-        formData.append("audio", file);
-
-        const res = await fetch(`/api/projects/${projectId}/voiceover`, {
-          method: "POST",
-          body: formData,
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || "Upload failed");
-        }
-
-        await fetchProject();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Upload failed");
+        await uploadVoiceover({
+          id: projectId,
+          audioFile: file,
+        }).unwrap();
+        await refetch();
+      } catch (err: any) {
+        setError(err?.data?.error || err?.message || "Upload failed");
       } finally {
         setActionLoading(null);
       }
     },
-    [projectId, fetchProject]
+    [projectId, uploadVoiceover, refetch]
   );
 
-  const handleGenerateImages = useCallback(async () => {
-    setActionLoading("images");
-    setError("");
+  const handleGenerateImages = useCallback(
+    async (options?: { provider?: "pexels" | "segmind"; styleGuide?: string }) => {
+      setActionLoading("images");
+      setError("");
 
-    try {
-      const res = await fetch(`/api/projects/${projectId}/images`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: "pexels" }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Image generation failed");
+      try {
+        await generateImages({
+          id: projectId,
+          provider: options?.provider || "pexels",
+          styleGuide: options?.styleGuide,
+        }).unwrap();
+        await refetch();
+      } catch (err: any) {
+        setError(err?.data?.error || err?.message || "Image generation failed");
+      } finally {
+        setActionLoading(null);
       }
+    },
+    [projectId, generateImages, refetch]
+  );
 
-      await fetchProject();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Image generation failed");
-    } finally {
-      setActionLoading(null);
-    }
-  }, [projectId, fetchProject]);
+  const handleGenerateVideo = useCallback(
+    async (options?: { subtitleStyle?: unknown }) => {
+      setActionLoading("video");
+      setError("");
 
-  const handleGenerateVideo = useCallback(async () => {
-    setActionLoading("video");
-    setError("");
-
-    try {
-      const res = await fetch(`/api/projects/${projectId}/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Video generation failed");
+      try {
+        await generateVideo({
+          id: projectId,
+          subtitleStyle: options?.subtitleStyle,
+        }).unwrap();
+        await refetch();
+      } catch (err: any) {
+        setError(err?.data?.error || err?.message || "Video generation failed");
+      } finally {
+        setActionLoading(null);
       }
-
-      await fetchProject();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Video generation failed");
-    } finally {
-      setActionLoading(null);
-    }
-  }, [projectId, fetchProject]);
+    },
+    [projectId, generateVideo, refetch]
+  );
 
   return {
-    project,
-    loading,
+    project: projectData,
+    loading: isLoading,
     actionLoading,
     error,
-    fetchProject,
+    refetch,
     handleResearch,
     handleVoiceoverUpload,
     handleGenerateImages,

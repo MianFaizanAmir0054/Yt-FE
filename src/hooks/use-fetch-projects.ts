@@ -1,53 +1,52 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Project, ProjectStats } from "@/types";
+import { useMemo } from "react";
+import { useGetProjectsQuery } from "@/lib/store/api/projectsApi";
+import { ProjectStats } from "@/types";
+import { Project } from "@/lib/schemas";
 
 interface UseFetchProjectsReturn {
   projects: Project[];
   loading: boolean;
   error: string | null;
-  fetchProjects: () => Promise<void>;
+  refetch: () => void;
   stats: ProjectStats;
   completionRate: number;
 }
 
-export function useFetchProjects(): UseFetchProjectsReturn {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+interface UseFetchProjectsParams {
+  workspaceId?: string;
+  channelId?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
 
-  const fetchProjects = useCallback(async () => {
-    try {
-      setError(null);
-      const res = await fetch("/api/projects");
-      const data = await res.json();
-      setProjects(data.projects || []);
-    } catch (err) {
-      console.error("Failed to fetch projects:", err);
-      setError(err instanceof Error ? err.message : "Failed to fetch projects");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+export function useFetchProjects(params: UseFetchProjectsParams = {}): UseFetchProjectsReturn {
+  const { data, isLoading, error, refetch } = useGetProjectsQuery(params);
+  
+  const projects = data?.projects || [];
 
-  const stats: ProjectStats = {
+  const stats: ProjectStats = useMemo(() => ({
     total: projects.length,
-    completed: projects.filter((p) => p.status === "completed").length,
+    completed: projects.filter((p) => p.status === "published" || p.status === "approved").length,
     inProgress: projects.filter(
-      (p) => !["completed", "failed", "draft"].includes(p.status)
+      (p) => !["published", "approved", "failed", "draft"].includes(p.status)
     ).length,
     failed: projects.filter((p) => p.status === "failed").length,
-  };
+  }), [projects]);
 
-  const completionRate =
-    stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+  const completionRate = useMemo(() => 
+    stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0,
+    [stats.total, stats.completed]
+  );
 
   return {
     projects,
-    loading,
-    error,
-    fetchProjects,
+    loading: isLoading,
+    error: error ? (error as any)?.data?.error || "Failed to fetch projects" : null,
+    refetch,
     stats,
     completionRate,
   };

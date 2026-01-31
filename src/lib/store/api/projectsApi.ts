@@ -140,48 +140,72 @@ export const projectsApi = apiSlice.injectEndpoints({
     }),
 
     // Generate research
-    generateResearch: builder.mutation<{ message: string; research: unknown }, string>({
-      query: (id) => ({
+    generateResearch: builder.mutation<
+      { message: string; researchData: unknown; script: unknown },
+      { id: string; duration?: string; tone?: string }
+    >({
+      query: ({ id, duration, tone }) => ({
         url: `/projects/${id}/research`,
         method: "POST",
+        body: { duration, tone },
       }),
-      invalidatesTags: (result, error, id) => [{ type: "Project", id }],
+      invalidatesTags: (result, error, { id }) => [{ type: "Project", id }],
     }),
 
-    // Generate script/timeline
-    generateTimeline: builder.mutation<{ message: string; timeline: unknown }, string>({
-      query: (id) => ({
+    // Generate script/timeline (add scene)
+    generateTimeline: builder.mutation<
+      { message: string; scene: unknown; timeline: unknown },
+      { id: string; afterSceneId?: string; scene?: unknown }
+    >({
+      query: ({ id, afterSceneId, scene }) => ({
         url: `/projects/${id}/timeline`,
         method: "POST",
+        body: { afterSceneId, scene },
       }),
-      invalidatesTags: (result, error, id) => [{ type: "Project", id }],
+      invalidatesTags: (result, error, { id }) => [{ type: "Project", id }],
     }),
 
     // Generate images
-    generateImages: builder.mutation<{ message: string }, string>({
-      query: (id) => ({
+    generateImages: builder.mutation<
+      { message: string; results: unknown; timeline: unknown },
+      { id: string; provider?: "pexels" | "segmind"; styleGuide?: string }
+    >({
+      query: ({ id, provider, styleGuide }) => ({
         url: `/projects/${id}/images`,
         method: "POST",
+        body: { provider, styleGuide },
       }),
-      invalidatesTags: (result, error, id) => [{ type: "Project", id }],
+      invalidatesTags: (result, error, { id }) => [{ type: "Project", id }],
     }),
 
-    // Generate voiceover
-    generateVoiceover: builder.mutation<{ message: string }, string>({
-      query: (id) => ({
-        url: `/projects/${id}/voiceover`,
-        method: "POST",
-      }),
-      invalidatesTags: (result, error, id) => [{ type: "Project", id }],
+    // Upload voiceover (uses FormData)
+    uploadVoiceover: builder.mutation<
+      { message: string; voiceover: unknown; timeline: unknown },
+      { id: string; audioFile: File }
+    >({
+      query: ({ id, audioFile }) => {
+        const formData = new FormData();
+        formData.append("audio", audioFile);
+        return {
+          url: `/projects/${id}/voiceover`,
+          method: "POST",
+          body: formData,
+        };
+      },
+      invalidatesTags: (result, error, { id }) => [{ type: "Project", id }],
     }),
 
     // Generate/assemble video
-    generateVideo: builder.mutation<{ message: string }, string>({
-      query: (id) => ({
+    generateVideo: builder.mutation<
+      { message: string; output: unknown },
+      { id: string; subtitleStyle?: unknown }
+    >({
+      query: ({ id, subtitleStyle }) => ({
         url: `/projects/${id}/generate`,
         method: "POST",
+        body: { subtitleStyle },
       }),
-      invalidatesTags: (result, error, id) => [{ type: "Project", id }],
+      invalidatesTags: (result, error, { id }) => [{ type: "Project", id }],
     }),
 
     // Update timeline
@@ -192,6 +216,18 @@ export const projectsApi = apiSlice.injectEndpoints({
         body: { timeline },
       }),
       invalidatesTags: (result, error, { id }) => [{ type: "Project", id }],
+    }),
+
+    // Delete timeline scene
+    deleteTimelineScene: builder.mutation<
+      { message: string; timeline: unknown },
+      { projectId: string; sceneId: string }
+    >({
+      query: ({ projectId, sceneId }) => ({
+        url: `/projects/${projectId}/timeline/${sceneId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (result, error, { projectId }) => [{ type: "Project", id: projectId }],
     }),
   }),
 });
@@ -207,7 +243,8 @@ export const {
   useGenerateResearchMutation,
   useGenerateTimelineMutation,
   useGenerateImagesMutation,
-  useGenerateVoiceoverMutation,
+  useUploadVoiceoverMutation,
   useGenerateVideoMutation,
   useUpdateTimelineMutation,
+  useDeleteTimelineSceneMutation,
 } = projectsApi;
