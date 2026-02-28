@@ -263,15 +263,15 @@ export const projectsApi = apiSlice.injectEndpoints({
       invalidatesTags: (result, error, { id }) => [{ type: "Project", id }],
     }),
 
-    // Generate AI scene videos (Fabric 1.0)
+    // Generate AI scene videos (Replicate minimax/video-01)
     generateSceneVideos: builder.mutation<
       { message: string; results: Array<{ sceneId: string; success: boolean; error?: string }>; timeline: unknown },
-      { id: string; resolution?: "480p" | "720p" }
+      { id: string; resolution?: "480p" | "720p"; useExisting?: boolean }
     >({
-      query: ({ id, resolution }) => ({
+      query: ({ id, resolution, useExisting }) => ({
         url: `/projects/${id}/scene-videos`,
         method: "POST",
-        body: { resolution },
+        body: { resolution, useExisting },
       }),
       invalidatesTags: (result, error, { id }) => [{ type: "Project", id }],
     }),

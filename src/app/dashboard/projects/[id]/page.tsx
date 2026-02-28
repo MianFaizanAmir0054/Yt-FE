@@ -46,6 +46,9 @@ export default function ProjectDetailPage({
   const isFailed = project?.status === "failed";
   const currentStep = project ? resolveStepFromProjectData(project) : 1;
 
+  // Toggle: use existing AI videos instead of generating new ones
+  const [useExistingVideos, setUseExistingVideos] = useState(true);
+
   // Allow navigating back to completed steps to redo them
   const [activeStep, setActiveStep] = useState(currentStep);
 
@@ -151,9 +154,12 @@ export default function ProjectDetailPage({
           {viewingStep === 4 && (
             <SceneVideosStep
               isLoading={actionLoading === "scene-videos"}
-              onGenerate={handleGenerateSceneVideos}
+              onGenerate={(opts) => handleGenerateSceneVideos(opts)}
               progressPercent={videoProgress}
               isFailed={isFailed && currentStep === 4}
+              hasExistingVideos={true}
+              useExisting={useExistingVideos}
+              onToggleUseExisting={setUseExistingVideos}
             />
           )}
 

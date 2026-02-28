@@ -20,7 +20,7 @@ interface UseProjectActionsReturn {
   handleResearch: (options?: { duration?: string; tone?: string }) => Promise<void>;
   handleVoiceoverUpload: (file: File) => Promise<void>;
   handleGenerateImages: (options?: { provider?: "pexels" | "segmind"; styleGuide?: string }) => Promise<void>;
-  handleGenerateSceneVideos: (options?: { resolution?: "480p" | "720p" }) => Promise<void>;
+  handleGenerateSceneVideos: (options?: { resolution?: "480p" | "720p"; useExisting?: boolean }) => Promise<void>;
   handleGenerateVideo: (options?: { subtitleStyle?: unknown }) => Promise<void>;
   setError: (error: string) => void;
 }
@@ -132,15 +132,16 @@ export function useProjectActions(projectId: string): UseProjectActionsReturn {
   );
 
   const handleGenerateSceneVideos = useCallback(
-    async (options?: { resolution?: "480p" | "720p" }) => {
+    async (options?: { resolution?: "480p" | "720p"; useExisting?: boolean }) => {
       setActionLoading("scene-videos");
       setError("");
-      startVideoProgress();
+      if (!options?.useExisting) startVideoProgress();
 
       try {
         await generateSceneVideos({
           id: projectId,
           resolution: options?.resolution || "480p",
+          useExisting: options?.useExisting,
         }).unwrap();
         clearVideoProgressTimer();
         setVideoProgress(100);
