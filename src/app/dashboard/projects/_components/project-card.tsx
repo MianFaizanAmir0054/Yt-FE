@@ -21,6 +21,8 @@ interface ProjectCardProps {
 }
 
 export function ProjectCard({ project, onDelete, isDeleting }: ProjectCardProps) {
+  const isVideoProcessing = project.status === "processing";
+
   return (
     <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden hover:border-gray-600 transition-colors">
       <Link href={`/dashboard/projects/${project._id}`} className="block p-4">
@@ -33,7 +35,14 @@ export function ProjectCard({ project, onDelete, isDeleting }: ProjectCardProps)
               STATUS_COLORS[project.status]
             }`}
           >
-            {STATUS_LABELS[project.status]}
+            {isVideoProcessing ? (
+              <span className="inline-flex items-center gap-1">
+                <Loader2 className="animate-spin" size={12} />
+                Compiling
+              </span>
+            ) : (
+              STATUS_LABELS[project.status]
+            )}
           </span>
         </div>
         <p className="text-sm text-gray-400 line-clamp-2 mb-3">

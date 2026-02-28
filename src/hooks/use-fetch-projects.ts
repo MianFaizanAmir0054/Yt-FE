@@ -30,9 +30,9 @@ export function useFetchProjects(params: UseFetchProjectsParams = {}): UseFetchP
 
   const stats: ProjectStats = useMemo(() => ({
     total: projects.length,
-    completed: projects.filter((p) => p.status === "published" || p.status === "approved").length,
+    completed: projects.filter((p) => ["published", "approved", "completed"].includes(p.status)).length,
     inProgress: projects.filter(
-      (p) => !["published", "approved", "failed", "draft"].includes(p.status)
+      (p) => !["published", "approved", "completed", "failed", "draft"].includes(p.status)
     ).length,
     failed: projects.filter((p) => p.status === "failed").length,
   }), [projects]);

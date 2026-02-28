@@ -77,7 +77,8 @@ export default function ProjectsPage() {
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
 
       <ProjectsGrid
-        projects={filteredProjects}
+        projects={projects}
+        // projects={filteredProjects}
         onDelete={handleDelete}
         isDeleting={isDeleting}
         searchQuery={searchQuery}

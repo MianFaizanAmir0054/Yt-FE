@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   useGetProjectQuery,
   useGenerateResearchMutation,
@@ -13,6 +13,7 @@ interface UseProjectActionsReturn {
   project: ReturnType<typeof useGetProjectQuery>["data"];
   loading: boolean;
   actionLoading: string | null;
+  videoProgress: number;
   error: string;
   refetch: () => void;
   handleResearch: (options?: { duration?: string; tone?: string }) => Promise<void>;
@@ -25,12 +26,45 @@ interface UseProjectActionsReturn {
 export function useProjectActions(projectId: string): UseProjectActionsReturn {
   const { data: projectData, isLoading, refetch } = useGetProjectQuery(projectId);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [videoProgress, setVideoProgress] = useState(0);
   const [error, setError] = useState("");
+  const videoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [generateResearch] = useGenerateResearchMutation();
   const [uploadVoiceover] = useUploadVoiceoverMutation();
   const [generateImages] = useGenerateImagesMutation();
   const [generateVideo] = useGenerateVideoMutation();
+
+  const clearVideoProgressTimer = useCallback(() => {
+    if (videoProgressTimerRef.current) {
+      clearInterval(videoProgressTimerRef.current);
+      videoProgressTimerRef.current = null;
+    }
+  }, []);
+
+  const startVideoProgress = useCallback(() => {
+    clearVideoProgressTimer();
+    setVideoProgress(7);
+    videoProgressTimerRef.current = setInterval(() => {
+      setVideoProgress((prev) => {
+        if (prev >= 95) {
+          return 95;
+        }
+
+        if (prev < 70) {
+          return prev + 6;
+        }
+
+        return prev + 2;
+      });
+    }, 1400);
+  }, [clearVideoProgressTimer]);
+
+  useEffect(() => {
+    return () => {
+      clearVideoProgressTimer();
+    };
+  }, [clearVideoProgressTimer]);
 
   const handleResearch = useCallback(
     async (options?: { duration?: string; tone?: string }) => {
@@ -98,26 +132,32 @@ export function useProjectActions(projectId: string): UseProjectActionsReturn {
     async (options?: { subtitleStyle?: unknown }) => {
       setActionLoading("video");
       setError("");
+      startVideoProgress();
 
       try {
         await generateVideo({
           id: projectId,
           subtitleStyle: options?.subtitleStyle,
         }).unwrap();
+        clearVideoProgressTimer();
+        setVideoProgress(100);
         await refetch();
       } catch (err: any) {
+        clearVideoProgressTimer();
+        setVideoProgress(0);
         setError(err?.data?.error || err?.message || "Video generation failed");
       } finally {
         setActionLoading(null);
       }
     },
-    [projectId, generateVideo, refetch]
+    [projectId, generateVideo, refetch, clearVideoProgressTimer, startVideoProgress]
   );
 
   return {
     project: projectData,
     loading: isLoading,
     actionLoading,
+    videoProgress,
     error,
     refetch,
     handleResearch,

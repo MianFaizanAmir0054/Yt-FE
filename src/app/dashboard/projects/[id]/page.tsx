@@ -30,6 +30,7 @@ export default function ProjectDetailPage({
     project: projectData,
     loading,
     actionLoading,
+    videoProgress,
     error,
     handleResearch,
     handleVoiceoverUpload,
@@ -121,6 +122,7 @@ export default function ProjectDetailPage({
               status={project.status}
               isLoading={actionLoading === "video"}
               onGenerate={handleGenerateVideo}
+              progressPercent={videoProgress}
             />
           )}
 

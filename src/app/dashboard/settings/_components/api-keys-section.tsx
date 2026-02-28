@@ -1,18 +1,20 @@
 "use client";
 
-import { Key, Eye, EyeOff, CheckCircle } from "lucide-react";
+import { Key, Eye, EyeOff, CheckCircle, Trash2 } from "lucide-react";
 
 import { API_KEY_FIELDS, ApiKeyField } from "@/constants";
 import { ApiKeyConfig } from "@/types";
 
 interface ApiKeyInputProps {
   field: ApiKeyField;
-  value: string;
+  value?: string;
   showKey: boolean;
   isConfigured: boolean;
   maskedKey: string | null;
   onChange: (value: string) => void;
   onToggleShow: () => void;
+  onDelete: () => void;
+  isDeleting?: boolean;
 }
 
 function ApiKeyInput({
@@ -23,7 +25,13 @@ function ApiKeyInput({
   maskedKey,
   onChange,
   onToggleShow,
+  onDelete,
+  isDeleting = false,
 }: ApiKeyInputProps) {
+  const hasUserInput = typeof value === "string" && value.length > 0;
+  const shouldShowMaskedValue = !hasUserInput && isConfigured && !!maskedKey;
+  const displayValue = hasUserInput ? value : isConfigured ? maskedKey || "" : "";
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -41,23 +49,36 @@ function ApiKeyInput({
       <p className="text-xs text-gray-400 mb-2">{field.description}</p>
       <div className="relative">
         <input
-          type={showKey ? "text" : "password"}
-          value={value !== undefined ? value : isConfigured ? maskedKey || "" : ""}
+          type={shouldShowMaskedValue ? "text" : showKey ? "text" : "password"}
+          value={displayValue}
           onChange={(e) => onChange(e.target.value)}
           placeholder={
             isConfigured
               ? "Enter new key to update"
               : field.placeholder || "Enter API key"
           }
-          className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent pr-12"
+          className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent pr-24"
         />
-        <button
-          type="button"
-          onClick={onToggleShow}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-        >
-          {showKey ? <EyeOff size={20} /> : <Eye size={20} />}
-        </button>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggleShow}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            {showKey ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+          {isConfigured && (
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={isDeleting}
+              className="text-gray-400 hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Delete this API key"
+            >
+              <Trash2 size={20} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -67,16 +88,20 @@ interface ApiKeysSectionProps {
   config: ApiKeyConfig | null;
   apiKeys: Record<string, string>;
   showKeys: Record<string, boolean>;
+  deletingKeys?: Record<string, boolean>;
   onApiKeyChange: (key: string, value: string) => void;
   onToggleShowKey: (key: string) => void;
+  onDeleteApiKey?: (key: string) => Promise<void>;
 }
 
 export function ApiKeysSection({
   config,
   apiKeys,
   showKeys,
+  deletingKeys = {},
   onApiKeyChange,
   onToggleShowKey,
+  onDeleteApiKey,
 }: ApiKeysSectionProps) {
   return (
     <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
@@ -99,12 +124,14 @@ export function ApiKeysSection({
           <ApiKeyInput
             key={field.key}
             field={field}
-            value={apiKeys[field.key] || ""}
+            value={apiKeys[field.key]}
             showKey={showKeys[field.key] || false}
             isConfigured={config?.configured[field.key] || false}
             maskedKey={config?.maskedKeys[field.key] || null}
             onChange={(value) => onApiKeyChange(field.key, value)}
             onToggleShow={() => onToggleShowKey(field.key)}
+            onDelete={() => onDeleteApiKey?.(field.key)}
+            isDeleting={deletingKeys[field.key] || false}
           />
         ))}
       </div>

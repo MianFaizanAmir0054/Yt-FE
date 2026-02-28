@@ -148,6 +148,13 @@ export const ProjectStatusSchema = z.enum([
   "approved",
   "published",
   "failed",
+  "researching",
+  "script-ready",
+  "voiceover-uploaded",
+  "images-ready",
+  "processing",
+  "completed",
+  "rejected",
 ]);
 
 export const ProjectSchema = z.object({

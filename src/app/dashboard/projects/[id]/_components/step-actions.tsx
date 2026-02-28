@@ -12,6 +12,7 @@ interface StepActionProps {
   isLoading: boolean;
   isProcessing?: boolean;
   processingText?: string;
+  processingPercent?: number;
 }
 
 function StepActionCard({
@@ -24,6 +25,7 @@ function StepActionCard({
   isLoading,
   isProcessing = false,
   processingText = "Processing...",
+  processingPercent,
 }: StepActionProps) {
   return (
     <>
@@ -39,6 +41,19 @@ function StepActionCard({
           <div className="text-center py-8">
             <Loader2 className="w-12 h-12 animate-spin text-purple-500 mx-auto mb-4" />
             <p className="text-gray-400">{processingText}</p>
+            {typeof processingPercent === "number" && processingPercent > 0 && (
+              <div className="mt-4 max-w-xs mx-auto">
+                <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-purple-500 transition-all duration-500"
+                    style={{ width: `${Math.min(100, Math.max(0, processingPercent))}%` }}
+                  />
+                </div>
+                <p className="text-sm text-purple-400 mt-2 font-medium">
+                  {Math.round(processingPercent)}%
+                </p>
+              </div>
+            )}
             <p className="text-xs text-gray-500 mt-2">
               This may take 1-2 minutes
             </p>
@@ -168,9 +183,10 @@ interface VideoStepProps {
   status: string;
   isLoading: boolean;
   onGenerate: () => void;
+  progressPercent?: number;
 }
 
-export function VideoStep({ status, isLoading, onGenerate }: VideoStepProps) {
+export function VideoStep({ status, isLoading, onGenerate, progressPercent }: VideoStepProps) {
   const isProcessing = status === "processing";
 
   return (
@@ -182,8 +198,9 @@ export function VideoStep({ status, isLoading, onGenerate }: VideoStepProps) {
       loadingText="Creating Video..."
       onClick={onGenerate}
       isLoading={isLoading}
-      isProcessing={isProcessing}
-      processingText="Processing video..."
+      isProcessing={isProcessing || isLoading}
+      processingText="Compiling images into video..."
+      processingPercent={progressPercent}
     />
   );
 }

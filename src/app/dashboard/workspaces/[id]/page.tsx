@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useMemo, use } from "react";
 import { useSession } from "@/lib/auth-client";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -49,44 +49,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  useGetWorkspaceQuery,
+  useGetWorkspaceMembersQuery,
+  useInviteMemberMutation,
+  useUpdateMemberMutation,
+  useRemoveMemberMutation,
+  useUpdateWorkspaceMutation,
+} from "@/lib/store/api/workspacesApi";
+import { useGetChannelsQuery } from "@/lib/store/api/channelsApi";
+import { Workspace, WorkspaceMember, Channel } from "@/lib/schemas";
 
-interface Workspace {
-  _id: string;
-  name: string;
-  description?: string;
-  ownerId: {
-    _id: string;
-    name: string;
-    email: string;
-  };
-  channelIds?: Array<{
-    _id: string;
-    name: string;
-  }>;
-  settings: {
-    allowMemberInvites: boolean;
-    defaultProjectVisibility: string;
-  };
-  createdAt: string;
-}
-
-interface WorkspaceMember {
-  _id: string;
-  userId: {
-    _id: string;
-    name: string;
-    email: string;
-  };
-  role: "owner" | "admin" | "editor" | "viewer";
-  joinedAt: string;
-}
-
-interface Channel {
-  _id: string;
-  name: string;
-}
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+// Types are imported from schemas
 
 const roleIcons = {
   owner: Crown,
@@ -113,114 +87,88 @@ export default function WorkspaceDetailPage({
   const searchParams = useSearchParams();
   const showInvite = searchParams.get("invite") === "true";
 
-  const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  const [members, setMembers] = useState<WorkspaceMember[]>([]);
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isInviteOpen, setIsInviteOpen] = useState(showInvite);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("editor");
-  const [inviting, setInviting] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({
     name: "",
     description: "",
     channelIds: [] as string[],
   });
 
+  const {
+    data: workspaceData,
+    isLoading: isWorkspaceLoading,
+    isError: isWorkspaceError,
+  } = useGetWorkspaceQuery(id);
+
+  const { data: membersData, refetch: refetchMembers } = useGetWorkspaceMembersQuery({
+    workspaceId: id,
+  });
+
+  const { data: channelsData } = useGetChannelsQuery({ limit: 100 });
+
+  const [inviteMember, { isLoading: isInviting }] = useInviteMemberMutation();
+  const [updateMember] = useUpdateMemberMutation();
+  const [removeMember] = useRemoveMemberMutation();
+  const [updateWorkspace, { isLoading: isSaving }] = useUpdateWorkspaceMutation();
+
+  const workspace = workspaceData?.workspace || null;
+  const members = membersData?.members || [];
+  const channels = channelsData?.channels || [];
+
+  const channelNames = useMemo(() => {
+    if (!workspace?.channelIds) return [] as string[];
+    return workspace.channelIds.map((c) => {
+      if (typeof c === "string") {
+        return channels.find((ch) => ch._id === c)?.name || c;
+      }
+      return c.name;
+    });
+  }, [workspace, channels]);
+
+  const ownerEmail = useMemo(() => {
+    if (!workspace?.ownerId || typeof workspace.ownerId === "string") return null;
+    return workspace.ownerId.email;
+  }, [workspace]);
+
+  const ownerName = useMemo(() => {
+    if (!workspace?.ownerId || typeof workspace.ownerId === "string") return "Unknown";
+    return workspace.ownerId.name;
+  }, [workspace]);
+
+  const getMemberName = (userId: WorkspaceMember["userId"]) =>
+    typeof userId === "string" ? "Unknown" : userId.name;
+
+  const getMemberEmail = (userId: WorkspaceMember["userId"]) =>
+    typeof userId === "string" ? "" : userId.email;
+
   useEffect(() => {
-    fetchWorkspace();
-    fetchMembers();
-    fetchChannels();
-  }, [id]);
-
-  const fetchWorkspace = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/workspaces/${id}`, {
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setWorkspace(data.workspace);
-        setEditForm({
-          name: data.workspace.name,
-          description: data.workspace.description || "",
-          channelIds: data.workspace.channelIds?.map((c: any) => c._id) || [],
-        });
-      } else {
-        router.push("/dashboard/workspaces");
-      }
-    } catch (error) {
-      console.error("Failed to fetch workspace:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchMembers = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/workspaces/${id}/members`, {
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMembers(data.members || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch members:", error);
-    }
-  };
-
-  const fetchChannels = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/channels`, {
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setChannels(data.channels || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch channels:", error);
-    }
-  };
+    if (!workspace) return;
+    setEditForm({
+      name: workspace.name,
+      description: workspace.description || "",
+      channelIds:
+        workspace.channelIds?.map((c) => (typeof c === "string" ? c : c._id)) || [],
+    });
+  }, [workspace]);
 
   const handleInvite = async () => {
-    setInviting(true);
     try {
-      const res = await fetch(`${API_URL}/api/workspaces/${id}/members`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
-      });
-      if (res.ok) {
-        setIsInviteOpen(false);
-        setInviteEmail("");
-        fetchMembers();
-      } else {
-        const data = await res.json();
-        alert(data.error || "Failed to invite member");
-      }
+      await inviteMember({ workspaceId: id, data: { email: inviteEmail, role: inviteRole } }).unwrap();
+      setIsInviteOpen(false);
+      setInviteEmail("");
+      refetchMembers();
     } catch (error) {
       console.error("Failed to invite member:", error);
-    } finally {
-      setInviting(false);
     }
   };
 
   const handleUpdateMemberRole = async (memberId: string, newRole: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/workspaces/${id}/members/${memberId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ role: newRole }),
-      });
-      if (res.ok) {
-        fetchMembers();
-      }
+      await updateMember({ workspaceId: id, memberId, data: { role: newRole as "admin" | "editor" | "viewer" } }).unwrap();
+      refetchMembers();
     } catch (error) {
       console.error("Failed to update member role:", error);
     }
@@ -229,35 +177,19 @@ export default function WorkspaceDetailPage({
   const handleRemoveMember = async (memberId: string) => {
     if (!confirm("Are you sure you want to remove this member?")) return;
     try {
-      const res = await fetch(`${API_URL}/api/workspaces/${id}/members/${memberId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (res.ok) {
-        fetchMembers();
-      }
+      await removeMember({ workspaceId: id, memberId }).unwrap();
+      refetchMembers();
     } catch (error) {
       console.error("Failed to remove member:", error);
     }
   };
 
   const handleUpdateWorkspace = async () => {
-    setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/api/workspaces/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(editForm),
-      });
-      if (res.ok) {
-        setIsEditOpen(false);
-        fetchWorkspace();
-      }
+      await updateWorkspace({ id, data: editForm }).unwrap();
+      setIsEditOpen(false);
     } catch (error) {
       console.error("Failed to update workspace:", error);
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -267,13 +199,13 @@ export default function WorkspaceDetailPage({
     // Super admins and admins can always manage
     if (userRole === "super_admin" || userRole === "admin") return true;
     // Check if user is workspace owner by email
-    if (workspace.ownerId?.email === session.user.email) return true;
+    if (ownerEmail && ownerEmail === session.user.email) return true;
     // Check if user is member with admin role
-    const myMembership = members.find((m) => m.userId?.email === session.user?.email);
-    return myMembership?.role === "owner" || myMembership?.role === "admin";
+    const myMembership = members.find((m) => getMemberEmail(m.userId) === session.user?.email);
+    return myMembership?.role === "admin";
   };
 
-  if (loading) {
+  if (isWorkspaceLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
@@ -281,7 +213,7 @@ export default function WorkspaceDetailPage({
     );
   }
 
-  if (!workspace) {
+  if (isWorkspaceError || !workspace) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">Workspace not found</p>
@@ -370,13 +302,13 @@ export default function WorkspaceDetailPage({
                       <div className="flex items-center gap-3">
                         <Avatar>
                           <AvatarFallback>
-                            {member.userId.name.charAt(0)}
+                            {getMemberName(member.userId).charAt(0)}
                           </AvatarFallback>
                         </Avatar>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-medium">
-                              {member.userId.name}
+                              {getMemberName(member.userId)}
                             </span>
                             <RoleIcon
                               className={`w-4 h-4 ${roleColors[member.role]}`}
@@ -386,11 +318,11 @@ export default function WorkspaceDetailPage({
                             </Badge>
                           </div>
                           <span className="text-sm text-muted-foreground">
-                            {member.userId.email}
+                            {getMemberEmail(member.userId)}
                           </span>
                         </div>
                       </div>
-                      {canManageMembers() && member.role !== "owner" && (
+                      {canManageMembers() && (
                         <div className="flex items-center gap-2">
                           <Select
                             value={member.role}
@@ -479,8 +411,8 @@ export default function WorkspaceDetailPage({
                     <div>
                       <p className="font-medium">Assigned Channels</p>
                       <p className="text-sm text-muted-foreground">
-                        {workspace.channelIds && workspace.channelIds.length > 0
-                          ? workspace.channelIds.map(c => c.name).join(", ")
+                        {channelNames.length > 0
+                          ? channelNames.join(", ")
                           : "No channels assigned"}
                       </p>
                     </div>
@@ -495,7 +427,7 @@ export default function WorkspaceDetailPage({
                   <div>
                     <p className="font-medium">Owner</p>
                     <p className="text-sm text-muted-foreground">
-                      {workspace.ownerId.name} ({workspace.ownerId.email})
+                      {ownerName} ({ownerEmail || ""})
                     </p>
                   </div>
                 </div>
@@ -563,8 +495,8 @@ export default function WorkspaceDetailPage({
             <Button variant="outline" onClick={() => setIsInviteOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleInvite} disabled={inviting || !inviteEmail}>
-              {inviting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            <Button onClick={handleInvite} disabled={isInviting || !inviteEmail}>
+              {isInviting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Send Invite
             </Button>
           </DialogFooter>
@@ -650,8 +582,8 @@ export default function WorkspaceDetailPage({
             <Button variant="outline" onClick={() => setIsEditOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleUpdateWorkspace} disabled={saving || !editForm.name}>
-              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            <Button onClick={handleUpdateWorkspace} disabled={isSaving || !editForm.name}>
+              {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Save Changes
             </Button>
           </DialogFooter>

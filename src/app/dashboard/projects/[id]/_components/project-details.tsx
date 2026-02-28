@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FileText, Clock, Mic, Image, ChevronRight } from "lucide-react";
 
 import { Scene, Voiceover, Script } from "@/types";
+import { buildUploadsUrl } from "@/lib/utils";
 
 interface ScriptSectionProps {
   script: Script;
@@ -53,7 +54,7 @@ export function TimelineSection({ scenes, projectId }: TimelineSectionProps) {
           <div key={scene.id} className="p-4 flex gap-4">
             {scene.imagePath ? (
               <img
-                src={`/api/files/${encodeURIComponent(scene.imagePath)}`}
+                src={buildUploadsUrl(scene.imagePath)}
                 alt={`Scene ${scene.order + 1}`}
                 className="w-20 h-20 object-cover rounded-lg"
               />
@@ -100,7 +101,7 @@ export function VoiceoverInfo({ voiceover }: VoiceoverInfoProps) {
           </p>
         </div>
         <audio
-          src={`/api/files/${encodeURIComponent(voiceover.filePath)}`}
+          src={buildUploadsUrl(voiceover.filePath)}
           controls
           className="ml-auto h-10"
         />

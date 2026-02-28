@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, Download } from "lucide-react";
+import { buildOutputsUrl } from "@/lib/utils";
 
 interface ProjectHeaderProps {
   title: string;
@@ -31,7 +32,7 @@ export function ProjectHeader({
       </div>
       {status === "completed" && videoPath && (
         <a
-          href={`/api/files/${encodeURIComponent(videoPath)}`}
+          href={buildOutputsUrl(videoPath)}
           className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
         >
           <Download size={20} />

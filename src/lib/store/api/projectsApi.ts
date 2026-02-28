@@ -49,11 +49,66 @@ export const projectsApi = apiSlice.injectEndpoints({
       }),
       transformResponse: (response: unknown) => {
         const parsed = ProjectsResponseSchema.safeParse(response);
-        if (!parsed.success) {
-          console.error("Projects response validation error:", parsed.error);
-          return { projects: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } };
+        if (parsed.success) {
+          return parsed.data;
         }
-        return parsed.data;
+
+        const fallback = {
+          projects: [] as Project[],
+          pagination: { page: 1, limit: 20, total: 0, pages: 0 },
+        };
+
+        const raw = response as {
+          projects?: unknown[];
+          pagination?: { page?: number; limit?: number; total?: number; pages?: number };
+        };
+
+        if (!Array.isArray(raw?.projects)) {
+          console.error("Projects response validation error:", parsed.error);
+          return fallback;
+        }
+
+        const validProjects: Project[] = [];
+        for (const item of raw.projects) {
+          const normalizedItem = (() => {
+            const candidate = { ...(item as Record<string, unknown>) };
+
+            if (candidate.createdBy === undefined && candidate.userId !== undefined) {
+              candidate.createdBy = candidate.userId;
+            }
+
+            if (candidate.workspaceId === undefined) {
+              candidate.workspaceId = "";
+            }
+
+            if (candidate.channelId === undefined) {
+              candidate.channelId = null;
+            }
+
+            return candidate;
+          })();
+
+          const projectParsed = ProjectSchema.safeParse(normalizedItem);
+          if (projectParsed.success) {
+            validProjects.push(projectParsed.data);
+          }
+        }
+
+        if (validProjects.length !== raw.projects.length) {
+          console.warn(
+            `Filtered ${raw.projects.length - validProjects.length} invalid project(s) from response`
+          );
+        }
+
+        return {
+          projects: validProjects,
+          pagination: {
+            page: Number(raw.pagination?.page) || 1,
+            limit: Number(raw.pagination?.limit) || 20,
+            total: Number(raw.pagination?.total) || validProjects.length,
+            pages: Number(raw.pagination?.pages) || 1,
+          },
+        };
       },
       providesTags: (result) =>
         result
@@ -80,7 +135,7 @@ export const projectsApi = apiSlice.injectEndpoints({
     }),
 
     // Create project
-    createProject: builder.mutation<{ message: string; project: { id: string; title: string; status: string; requiresApproval: boolean } }, CreateProjectInput>({
+    createProject: builder.mutation<{ message: string; project: Project }, CreateProjectInput>({
       query: (data) => ({
         url: "/projects",
         method: "POST",

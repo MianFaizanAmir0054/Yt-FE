@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -34,26 +34,27 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import {
+  useGetProjectQuery,
+  useUpdateTimelineMutation,
+  useGenerateImagesMutation,
+} from "@/lib/store/api/projectsApi";
+import { Scene, Project } from "@/types";
 
-interface Scene {
-  _id?: string;
-  order: number;
-  startTime: number;
-  endTime: number;
-  subtitle: string;
-  imageUrl?: string;
-  imagePrompt?: string;
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-interface Project {
-  _id: string;
-  title: string;
-  status: string;
-  timeline?: {
-    totalDuration: number;
-    scenes: Scene[];
-  };
-}
+const getUploadsUrl = (imagePath?: string) => {
+  if (!imagePath) return "";
+  const normalized = imagePath.replace(/\\/g, "/");
+  const uploadsIndex = normalized.lastIndexOf("/uploads/");
+  const relative = uploadsIndex >= 0
+    ? normalized.slice(uploadsIndex + "/uploads/".length)
+    : normalized;
+  const encoded = relative.split("/").map(encodeURIComponent).join("/");
+  return `${API_URL}/api/files/uploads/${encoded}`;
+};
+
+// Scene and Project types are imported from shared types
 
 interface SortableSceneProps {
   scene: Scene;
@@ -81,7 +82,7 @@ function SortableScene({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: scene._id || `scene-${index}` });
+  } = useSortable({ id: scene.id || `scene-${index}` });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -178,8 +179,8 @@ function SortableScene({
               <label className="text-xs text-gray-500">Subtitle</label>
             </div>
             <textarea
-              value={scene.subtitle}
-              onChange={(e) => onUpdate(index, "subtitle", e.target.value)}
+              value={scene.sceneText}
+              onChange={(e) => onUpdate(index, "sceneText", e.target.value)}
               rows={2}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500 resize-none"
               placeholder="Enter subtitle text..."
@@ -222,10 +223,10 @@ function SortableScene({
               </div>
             </div>
             <div className="flex gap-4">
-              {scene.imageUrl ? (
+              {scene.imagePath ? (
                 <div className="relative w-32 h-20 rounded overflow-hidden bg-gray-700 flex-shrink-0">
                   <img
-                    src={scene.imageUrl}
+                    src={getUploadsUrl(scene.imagePath)}
                     alt={`Scene ${index + 1}`}
                     className="w-full h-full object-cover"
                   />
@@ -262,10 +263,12 @@ export default function TimelinePage({
 
   const [project, setProject] = useState<Project | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+
+  const { data: projectData, isLoading } = useGetProjectQuery(projectId);
+  const [updateTimeline, { isLoading: isSaving }] = useUpdateTimelineMutation();
+  const [generateImages, { isLoading: isGeneratingImages }] = useGenerateImagesMutation();
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -275,21 +278,12 @@ export default function TimelinePage({
   );
 
   useEffect(() => {
-    fetchProject();
-  }, [projectId]);
-
-  const fetchProject = async () => {
-    try {
-      const res = await fetch(`/api/projects/${projectId}`);
-      const data = await res.json();
-      setProject(data.project);
-      setScenes(data.project?.timeline?.scenes || []);
-    } catch (error) {
-      console.error("Failed to fetch project:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (!projectData?.project) return;
+    setProject(projectData.project as Project);
+    const timelineScenes = (projectData.project as Project)?.timeline?.scenes || [];
+    setScenes(timelineScenes);
+    setHasChanges(false);
+  }, [projectData]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -297,10 +291,10 @@ export default function TimelinePage({
     if (over && active.id !== over.id) {
       setScenes((items) => {
         const oldIndex = items.findIndex(
-          (item) => (item._id || `scene-${items.indexOf(item)}`) === active.id
+          (item) => (item.id || `scene-${items.indexOf(item)}`) === active.id
         );
         const newIndex = items.findIndex(
-          (item) => (item._id || `scene-${items.indexOf(item)}`) === over.id
+          (item) => (item.id || `scene-${items.indexOf(item)}`) === over.id
         );
 
         const newItems = arrayMove(items, oldIndex, newIndex);
@@ -317,9 +311,14 @@ export default function TimelinePage({
     value: string | number
   ) => {
     setScenes((prev) =>
-      prev.map((scene, i) =>
-        i === index ? { ...scene, [field]: value } : scene
-      )
+      prev.map((scene, i) => {
+        if (i !== index) return scene;
+        const updated = { ...scene, [field]: value } as Scene;
+        if (field === "startTime" || field === "endTime") {
+          updated.duration = Math.max(0, updated.endTime - updated.startTime);
+        }
+        return updated;
+      })
     );
     setHasChanges(true);
   };
@@ -335,71 +334,40 @@ export default function TimelinePage({
     const newStartTime = lastScene ? lastScene.endTime : 0;
     const newEndTime = newStartTime + 5; // Default 5 second scene
 
-    setScenes((prev) => [
-      ...prev,
-      {
-        order: prev.length,
-        startTime: newStartTime,
-        endTime: newEndTime,
-        subtitle: "",
-        imagePrompt: "",
-      },
-    ]);
+    const newScene: Scene = {
+      id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `scene-${Date.now()}`,
+      order: scenes.length,
+      startTime: newStartTime,
+      endTime: newEndTime,
+      duration: newEndTime - newStartTime,
+      sceneText: "",
+      sceneDescription: "",
+      imagePrompt: "",
+      imageSource: "uploaded",
+      subtitles: [],
+    };
+
+    setScenes((prev) => [...prev, newScene]);
     setHasChanges(true);
   };
 
-  const handleImageUpload = async (index: number, file: File) => {
-    // Create FormData and upload
-    const formData = new FormData();
-    formData.append("image", file);
-    formData.append("sceneIndex", index.toString());
-
-    try {
-      const res = await fetch(`/api/projects/${projectId}/timeline`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setScenes((prev) =>
-          prev.map((scene, i) =>
-            i === index ? { ...scene, imageUrl: data.imageUrl } : scene
-          )
-        );
-      }
-    } catch (error) {
-      console.error("Failed to upload image:", error);
-    }
+  const handleImageUpload = async (_index: number, _file: File) => {
+    alert("Image upload is not supported yet. Use image prompts and regenerate images instead.");
   };
 
   const handleRegenerateImage = async (index: number) => {
     const scene = scenes[index];
-    if (!scene.imagePrompt) {
+    if (!scene?.imagePrompt) {
       alert("Please enter an image prompt first");
       return;
     }
 
     setRegeneratingIndex(index);
     try {
-      const res = await fetch(`/api/projects/${projectId}/images`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompts: [{ index, prompt: scene.imagePrompt }],
-          regenerate: true,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.images?.[0]?.url) {
-          setScenes((prev) =>
-            prev.map((s, i) =>
-              i === index ? { ...s, imageUrl: data.images[0].url } : s
-            )
-          );
-        }
+      const data = await generateImages({ id: projectId, provider: "pexels" }).unwrap();
+      const updatedTimeline = (data as { timeline?: { scenes?: Scene[] } }).timeline;
+      if (updatedTimeline?.scenes) {
+        setScenes(updatedTimeline.scenes);
       }
     } catch (error) {
       console.error("Failed to regenerate image:", error);
@@ -409,27 +377,24 @@ export default function TimelinePage({
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/timeline`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes }),
-      });
+    const totalDuration = scenes.length
+      ? Math.max(...scenes.map((s) => s.endTime))
+      : 0;
 
-      if (res.ok) {
-        setHasChanges(false);
-        alert("Timeline saved successfully!");
-      }
+    try {
+      await updateTimeline({
+        id: projectId,
+        timeline: { totalDuration, scenes },
+      }).unwrap();
+      setHasChanges(false);
+      alert("Timeline saved successfully!");
     } catch (error) {
       console.error("Failed to save timeline:", error);
       alert("Failed to save timeline");
-    } finally {
-      setSaving(false);
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
@@ -470,10 +435,10 @@ export default function TimelinePage({
           )}
           <button
             onClick={handleSave}
-            disabled={saving || !hasChanges}
+            disabled={isSaving || !hasChanges}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
           >
-            {saving ? (
+            {isSaving ? (
               <Loader2 size={18} className="animate-spin" />
             ) : (
               <Save size={18} />
@@ -508,20 +473,20 @@ export default function TimelinePage({
         onDragEnd={handleDragEnd}
       >
         <SortableContext
-          items={scenes.map((s, i) => s._id || `scene-${i}`)}
+          items={scenes.map((s, i) => s.id || `scene-${i}`)}
           strategy={verticalListSortingStrategy}
         >
           <div className="space-y-4">
             {scenes.map((scene, index) => (
               <SortableScene
-                key={scene._id || `scene-${index}`}
+                key={scene.id || `scene-${index}`}
                 scene={scene}
                 index={index}
                 onUpdate={handleUpdateScene}
                 onDelete={handleDeleteScene}
                 onImageUpload={handleImageUpload}
                 onRegenerateImage={handleRegenerateImage}
-                isRegenerating={regeneratingIndex === index}
+                isRegenerating={regeneratingIndex === index || isGeneratingImages}
               />
             ))}
           </div>
@@ -543,7 +508,7 @@ export default function TimelinePage({
         <ul className="space-y-1">
           <li>• Drag scenes by the grip handle to reorder them</li>
           <li>• Time format: MM:SS.ms (e.g., 1:30.50 = 1 minute, 30.5 seconds)</li>
-          <li>• Upload custom images or regenerate with AI using the prompt</li>
+          <li>• Regenerate images with AI using the prompt</li>
           <li>• Don&apos;t forget to save your changes!</li>
         </ul>
       </div>

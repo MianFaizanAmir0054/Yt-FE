@@ -10,8 +10,15 @@ export const API_KEY_FIELDS: ApiKeyField[] = [
   {
     key: "openai",
     label: "OpenAI API Key",
-    description: "Required for Whisper (audio analysis) and GPT (script generation)",
+    description: "Required for GPT-based script generation",
     placeholder: "sk-...",
+    required: true,
+  },
+  {
+    key: "assemblyai",
+    label: "AssemblyAI API Key",
+    description: "Required for voice transcription and timestamp analysis",
+    placeholder: "Enter AssemblyAI key",
     required: true,
   },
   {

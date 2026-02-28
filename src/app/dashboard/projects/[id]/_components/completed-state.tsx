@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle, Download, RefreshCw } from "lucide-react";
+import { buildOutputsUrl } from "@/lib/utils";
 
 interface ProjectOutput {
   videoPath: string;
@@ -29,7 +30,7 @@ export function CompletedState({
       <div className="p-4 lg:p-6 space-y-4">
         <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-96 mx-auto">
           <video
-            src={`/api/files/${encodeURIComponent(output.videoPath)}`}
+            src={buildOutputsUrl(output.videoPath)}
             controls
             className="w-full h-full object-contain"
           />
@@ -55,7 +56,7 @@ export function CompletedState({
 
         <div className="flex gap-3">
           <a
-            href={`/api/files/${encodeURIComponent(output.videoPath)}`}
+            href={buildOutputsUrl(output.videoPath)}
             download
             className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
           >

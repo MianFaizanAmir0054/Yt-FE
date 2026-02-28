@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import {
@@ -64,18 +64,15 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  useGetAdminUsersQuery,
+  useCreateAdminUserMutation,
+  useUpdateAdminUserMutation,
+  useDeleteAdminUserMutation,
+  AdminUser,
+} from "@/lib/store/api/adminApi";
 
-interface AdminUser {
-  _id: string;
-  name: string;
-  email: string;
-  role: "super_admin" | "admin" | "collaborator";
-  isActive: boolean;
-  createdAt: string;
-  lastLoginAt?: string;
-}
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+// AdminUser type imported from RTK Query API
 
 const roleConfig = {
   super_admin: {
@@ -104,8 +101,6 @@ const roleConfig = {
 export default function AdminPage() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -124,44 +119,34 @@ export default function AdminPage() {
   useEffect(() => {
     if (!isAdmin) {
       router.push("/dashboard");
-      return;
     }
-    fetchUsers();
-  }, [isAdmin]);
+  }, [isAdmin, router]);
 
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/admin/users`, {
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data.users || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const queryParams = useMemo(
+    () => ({
+      role: roleFilter === "all" ? undefined : roleFilter,
+      search: searchQuery || undefined,
+    }),
+    [roleFilter, searchQuery]
+  );
+
+  const {
+    data: usersData,
+    isLoading,
+    refetch: refetchUsers,
+  } = useGetAdminUsersQuery(queryParams, { skip: !isAdmin });
+
+  const [createAdminUser, { isLoading: isCreating }] = useCreateAdminUserMutation();
+  const [updateAdminUser] = useUpdateAdminUserMutation();
+  const [deleteAdminUser] = useDeleteAdminUserMutation();
 
   const handleCreateUser = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/api/admin/users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(formData),
-      });
-      if (res.ok) {
-        setIsCreateOpen(false);
-        setFormData({ name: "", email: "", password: "", role: "collaborator" });
-        fetchUsers();
-      } else {
-        const data = await res.json();
-        alert(data.error || "Failed to create user");
-      }
+      await createAdminUser(formData).unwrap();
+      setIsCreateOpen(false);
+      setFormData({ name: "", email: "", password: "", role: "collaborator" });
+      refetchUsers();
     } catch (error) {
       console.error("Failed to create user:", error);
     } finally {
@@ -171,15 +156,8 @@ export default function AdminPage() {
 
   const handleUpdateRole = async (userId: string, newRole: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/users/${userId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ role: newRole }),
-      });
-      if (res.ok) {
-        fetchUsers();
-      }
+      await updateAdminUser({ id: userId, data: { role: newRole as "admin" | "collaborator" } }).unwrap();
+      refetchUsers();
     } catch (error) {
       console.error("Failed to update user role:", error);
     }
@@ -187,15 +165,8 @@ export default function AdminPage() {
 
   const handleToggleActive = async (userId: string, isActive: boolean) => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/users/${userId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ isActive }),
-      });
-      if (res.ok) {
-        fetchUsers();
-      }
+      await updateAdminUser({ id: userId, data: { isActive } }).unwrap();
+      refetchUsers();
     } catch (error) {
       console.error("Failed to update user status:", error);
     }
@@ -206,18 +177,14 @@ export default function AdminPage() {
       return;
     }
     try {
-      const res = await fetch(`${API_URL}/api/admin/users/${userId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (res.ok) {
-        fetchUsers();
-      }
+      await deleteAdminUser(userId).unwrap();
+      refetchUsers();
     } catch (error) {
       console.error("Failed to delete user:", error);
     }
   };
 
+  const users = usersData?.users || [];
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -238,7 +205,7 @@ export default function AdminPage() {
     return null;
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="w-8 h-8 animate-spin text-purple-500" />

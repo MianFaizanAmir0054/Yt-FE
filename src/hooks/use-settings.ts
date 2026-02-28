@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { ApiKeyConfig, MessageState, UserPreferences } from "@/types";
 import { DEFAULT_PREFERENCES } from "@/constants";
+import { useGetApiKeysQuery, useUpdateApiKeysMutation } from "@/lib/store/api/userApi";
 
 interface UseSettingsReturn {
   config: ApiKeyConfig | null;
@@ -22,29 +23,32 @@ interface UseSettingsReturn {
 
 export function useSettings(): UseSettingsReturn {
   const [config, setConfig] = useState<ApiKeyConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<MessageState | null>(null);
+
+  const {
+    data: apiKeysData,
+    isLoading: isLoadingConfig,
+    refetch,
+  } = useGetApiKeysQuery();
+
+  const [updateApiKeys, { isLoading: isSaving }] = useUpdateApiKeysMutation();
 
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
   const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES);
 
-  const fetchConfig = useCallback(async () => {
-    try {
-      const res = await fetch("/api/user/api-keys");
-      const data = await res.json();
-      setConfig(data);
-      setPreferences(data.preferences || DEFAULT_PREFERENCES);
-    } catch (error) {
-      console.error("Failed to fetch config:", error);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (apiKeysData) {
+      setConfig(apiKeysData);
+      setPreferences(apiKeysData.preferences || DEFAULT_PREFERENCES);
     }
-  }, []);
+  }, [apiKeysData]);
+
+  const fetchConfig = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   const handleSave = useCallback(async () => {
-    setSaving(true);
     setMessage(null);
 
     try {
@@ -55,32 +59,21 @@ export function useSettings(): UseSettingsReturn {
         }
       }
 
-      const res = await fetch("/api/user/api-keys", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKeys: Object.keys(keysToSave).length > 0 ? keysToSave : undefined,
-          preferences,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to save");
-      }
+      await updateApiKeys({
+        apiKeys: Object.keys(keysToSave).length > 0 ? keysToSave : undefined,
+        preferences,
+      }).unwrap();
 
       setMessage({ type: "success", text: "Settings saved successfully!" });
       setApiKeys({});
-      fetchConfig();
+      await fetchConfig();
     } catch (error) {
       setMessage({
         type: "error",
         text: error instanceof Error ? error.message : "Failed to save",
       });
-    } finally {
-      setSaving(false);
     }
-  }, [apiKeys, preferences, fetchConfig]);
+  }, [apiKeys, preferences, updateApiKeys, fetchConfig]);
 
   const setApiKey = useCallback((key: string, value: string) => {
     setApiKeys((prev) => ({ ...prev, [key]: value }));
@@ -96,8 +89,8 @@ export function useSettings(): UseSettingsReturn {
 
   return {
     config,
-    loading,
-    saving,
+    loading: isLoadingConfig,
+    saving: isSaving,
     message,
     apiKeys,
     showKeys,
