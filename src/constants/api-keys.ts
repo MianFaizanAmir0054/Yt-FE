@@ -49,6 +49,13 @@ export const API_KEY_FIELDS: ApiKeyField[] = [
     placeholder: "",
     required: false,
   },
+  {
+    key: "replicate",
+    label: "Replicate API Token",
+    description: "For AI scene video generation using minimax/video-01 (get token at replicate.com)",
+    placeholder: "r8_...",
+    required: false,
+  },
 ];
 
 export const DEFAULT_PREFERENCES = {

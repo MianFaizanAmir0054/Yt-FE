@@ -58,6 +58,7 @@ export interface Scene {
   sceneDescription: string;
   imagePrompt: string;
   imagePath?: string;
+  videoPath?: string;
   imageSource: string;
   subtitles: Subtitle[];
 }

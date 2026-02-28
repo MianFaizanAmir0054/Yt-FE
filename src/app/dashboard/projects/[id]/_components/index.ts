@@ -3,6 +3,7 @@ export {
   ResearchStep,
   VoiceoverStep,
   ImagesStep,
+  SceneVideosStep,
   VideoStep,
 } from "./step-actions";
 export { CompletedState } from "./completed-state";

@@ -263,6 +263,19 @@ export const projectsApi = apiSlice.injectEndpoints({
       invalidatesTags: (result, error, { id }) => [{ type: "Project", id }],
     }),
 
+    // Generate AI scene videos (Fabric 1.0)
+    generateSceneVideos: builder.mutation<
+      { message: string; results: Array<{ sceneId: string; success: boolean; error?: string }>; timeline: unknown },
+      { id: string; resolution?: "480p" | "720p" }
+    >({
+      query: ({ id, resolution }) => ({
+        url: `/projects/${id}/scene-videos`,
+        method: "POST",
+        body: { resolution },
+      }),
+      invalidatesTags: (result, error, { id }) => [{ type: "Project", id }],
+    }),
+
     // Update timeline
     updateTimeline: builder.mutation<{ message: string; timeline: unknown }, { id: string; timeline: unknown }>({
       query: ({ id, timeline }) => ({
@@ -300,6 +313,7 @@ export const {
   useGenerateImagesMutation,
   useUploadVoiceoverMutation,
   useGenerateVideoMutation,
+  useGenerateSceneVideosMutation,
   useUpdateTimelineMutation,
   useDeleteTimelineSceneMutation,
 } = projectsApi;

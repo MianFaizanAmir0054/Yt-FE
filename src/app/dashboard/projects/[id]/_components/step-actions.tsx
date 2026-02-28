@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Mic, Image, Video, Loader2 } from "lucide-react";
+import { Search, Mic, Image, Film, Video, Loader2 } from "lucide-react";
 
 interface StepActionProps {
   title: string;
@@ -86,17 +86,18 @@ interface ResearchStepProps {
   status: string;
   isLoading: boolean;
   onResearch: () => void;
+  isFailed?: boolean;
 }
 
-export function ResearchStep({ status, isLoading, onResearch }: ResearchStepProps) {
+export function ResearchStep({ status, isLoading, onResearch, isFailed }: ResearchStepProps) {
   const isProcessing = status === "researching";
 
   return (
     <StepActionCard
       title="Step 1: Research & Generate Script"
-      description="AI will research your topic and create an engaging script"
+      description={isFailed ? "Previous attempt failed — click to retry" : "AI will research your topic and create an engaging script"}
       icon={<Search className="w-5 h-5 text-purple-500" />}
-      buttonText="Start Research"
+      buttonText={isFailed ? "Retry Research" : "Start Research"}
       loadingText="Researching..."
       onClick={onResearch}
       isLoading={isLoading}
@@ -163,18 +164,43 @@ export function VoiceoverStep({ isLoading, onUpload }: VoiceoverStepProps) {
 interface ImagesStepProps {
   isLoading: boolean;
   onGenerate: () => void;
+  isFailed?: boolean;
 }
 
-export function ImagesStep({ isLoading, onGenerate }: ImagesStepProps) {
+export function ImagesStep({ isLoading, onGenerate, isFailed }: ImagesStepProps) {
   return (
     <StepActionCard
       title="Step 3: Generate Images"
-      description="AI will generate or find images for each scene"
+      description={isFailed ? "Previous attempt failed — click to retry" : "AI will generate or find images for each scene"}
       icon={<Image className="w-5 h-5 text-purple-500" />}
-      buttonText="Generate Images"
+      buttonText={isFailed ? "Retry Image Generation" : "Generate Images"}
       loadingText="Generating Images..."
       onClick={onGenerate}
       isLoading={isLoading}
+    />
+  );
+}
+
+interface SceneVideosStepProps {
+  isLoading: boolean;
+  onGenerate: () => void;
+  progressPercent?: number;
+  isFailed?: boolean;
+}
+
+export function SceneVideosStep({ isLoading, onGenerate, progressPercent, isFailed }: SceneVideosStepProps) {
+  return (
+    <StepActionCard
+      title="Step 4: Generate AI Scene Videos"
+      description={isFailed ? "Scene video generation failed — click to retry" : "AI will turn each scene image into an animated video clip using Fabric 1.0"}
+      icon={<Film className="w-5 h-5 text-cyan-500" />}
+      buttonText={isFailed ? "Retry Scene Videos" : "Generate AI Videos"}
+      loadingText="Generating AI Videos..."
+      onClick={onGenerate}
+      isLoading={isLoading}
+      isProcessing={isLoading}
+      processingText="Generating AI video clips for each scene... This may take a few minutes."
+      processingPercent={progressPercent}
     />
   );
 }
@@ -184,22 +210,23 @@ interface VideoStepProps {
   isLoading: boolean;
   onGenerate: () => void;
   progressPercent?: number;
+  isFailed?: boolean;
 }
 
-export function VideoStep({ status, isLoading, onGenerate, progressPercent }: VideoStepProps) {
+export function VideoStep({ status, isLoading, onGenerate, progressPercent, isFailed }: VideoStepProps) {
   const isProcessing = status === "processing";
 
   return (
     <StepActionCard
-      title="Step 4: Create Video"
-      description="Assemble images, audio, and subtitles into final video"
+      title="Step 5: Create Final Video"
+      description={isFailed ? "Video compilation failed — click to retry" : "Assemble scene videos, audio, and subtitles into final video"}
       icon={<Video className="w-5 h-5 text-purple-500" />}
-      buttonText="Create Video"
+      buttonText={isFailed ? "Retry Video Compilation" : "Create Final Video"}
       loadingText="Creating Video..."
       onClick={onGenerate}
       isLoading={isLoading}
       isProcessing={isProcessing || isLoading}
-      processingText="Compiling images into video..."
+      processingText="Compiling final video..."
       processingPercent={progressPercent}
     />
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, Clock, Mic, Image, ChevronRight } from "lucide-react";
+import { FileText, Clock, Mic, Image, Film, ChevronRight } from "lucide-react";
 
 import { Scene, Voiceover, Script } from "@/types";
 import { buildUploadsUrl } from "@/lib/utils";
@@ -52,14 +52,29 @@ export function TimelineSection({ scenes, projectId }: TimelineSectionProps) {
       <div className="divide-y divide-gray-700 max-h-96 overflow-y-auto">
         {scenes.map((scene) => (
           <div key={scene.id} className="p-4 flex gap-4">
-            {scene.imagePath ? (
+            {scene.videoPath ? (
+              <div className="relative w-20 h-20 rounded-lg overflow-hidden shrink-0">
+                <video
+                  src={buildUploadsUrl(scene.videoPath)}
+                  className="w-full h-full object-cover"
+                  muted
+                  loop
+                  playsInline
+                  onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+                  onMouseLeave={(e) => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+                />
+                <div className="absolute top-1 right-1 bg-cyan-500/80 rounded p-0.5">
+                  <Film className="w-3 h-3 text-white" />
+                </div>
+              </div>
+            ) : scene.imagePath ? (
               <img
                 src={buildUploadsUrl(scene.imagePath)}
                 alt={`Scene ${scene.order + 1}`}
-                className="w-20 h-20 object-cover rounded-lg"
+                className="w-20 h-20 object-cover rounded-lg shrink-0"
               />
             ) : (
-              <div className="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center">
+              <div className="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center shrink-0">
                 <Image className="w-8 h-8 text-gray-500" />
               </div>
             )}

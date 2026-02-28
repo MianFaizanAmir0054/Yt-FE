@@ -1,11 +1,11 @@
 "use client";
 
-import { use } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { Loader2, AlertCircle } from "lucide-react";
 
 import { useProjectActions } from "@/hooks";
-import { STATUS_TO_STEP } from "@/constants";
+import { resolveStepFromProjectData } from "@/constants";
 
 import {
   ProgressSteps,
@@ -13,6 +13,7 @@ import {
   ResearchStep,
   VoiceoverStep,
   ImagesStep,
+  SceneVideosStep,
   VideoStep,
   CompletedState,
   ScriptSection,
@@ -35,11 +36,23 @@ export default function ProjectDetailPage({
     handleResearch,
     handleVoiceoverUpload,
     handleGenerateImages,
+    handleGenerateSceneVideos,
     handleGenerateVideo,
   } = useProjectActions(id);
 
   // Extract project from response data
   const project = projectData?.project;
+
+  const isFailed = project?.status === "failed";
+  const currentStep = project ? resolveStepFromProjectData(project) : 1;
+
+  // Allow navigating back to completed steps to redo them
+  const [activeStep, setActiveStep] = useState(currentStep);
+
+  // Sync activeStep when the real currentStep advances (e.g. after a successful action)
+  useEffect(() => {
+    setActiveStep(currentStep);
+  }, [currentStep]);
 
   if (loading) {
     return (
@@ -64,7 +77,7 @@ export default function ProjectDetailPage({
     );
   }
 
-  const currentStep = STATUS_TO_STEP[project.status] || 1;
+  const viewingStep = activeStep;
 
   return (
     <div className="space-y-6">
@@ -77,7 +90,23 @@ export default function ProjectDetailPage({
       />
 
       {/* Progress Steps */}
-      <ProgressSteps currentStep={currentStep} />
+      <ProgressSteps
+        currentStep={currentStep}
+        activeStep={activeStep}
+        failedAtStep={isFailed ? currentStep : undefined}
+        onStepClick={(step) => setActiveStep(step)}
+      />
+
+      {/* Failed Banner */}
+      {isFailed && (
+        <div className="p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 flex items-center gap-2">
+          <AlertCircle size={20} />
+          <span>
+            The previous attempt failed. Your progress is intact — you can retry
+            from where you left off.
+          </span>
+        </div>
+      )}
 
       {/* Error Display */}
       {error && (
@@ -92,16 +121,17 @@ export default function ProjectDetailPage({
         {/* Left Column - Current Step Action */}
         <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
           {/* Step 1: Research & Script */}
-          {currentStep === 1 && (
+          {viewingStep === 1 && (
             <ResearchStep
               status={project.status}
               isLoading={actionLoading === "research"}
               onResearch={handleResearch}
+              isFailed={isFailed && currentStep === 1}
             />
           )}
 
           {/* Step 2: Upload Voiceover */}
-          {currentStep === 2 && (
+          {viewingStep === 2 && (
             <VoiceoverStep
               isLoading={actionLoading === "voiceover"}
               onUpload={handleVoiceoverUpload}
@@ -109,25 +139,37 @@ export default function ProjectDetailPage({
           )}
 
           {/* Step 3: Generate Images */}
-          {currentStep === 3 && (
+          {viewingStep === 3 && (
             <ImagesStep
               isLoading={actionLoading === "images"}
               onGenerate={handleGenerateImages}
+              isFailed={isFailed && currentStep === 3}
             />
           )}
 
-          {/* Step 4: Create Video */}
-          {currentStep === 4 && (
+          {/* Step 4: AI Scene Videos */}
+          {viewingStep === 4 && (
+            <SceneVideosStep
+              isLoading={actionLoading === "scene-videos"}
+              onGenerate={handleGenerateSceneVideos}
+              progressPercent={videoProgress}
+              isFailed={isFailed && currentStep === 4}
+            />
+          )}
+
+          {/* Step 5: Create Video */}
+          {viewingStep === 5 && (
             <VideoStep
               status={project.status}
               isLoading={actionLoading === "video"}
               onGenerate={handleGenerateVideo}
               progressPercent={videoProgress}
+              isFailed={isFailed && currentStep === 5}
             />
           )}
 
           {/* Completed State */}
-          {currentStep === 5 && project.output && (
+          {viewingStep === 6 && project.output && (
             <CompletedState
               output={project.output}
               onRegenerate={handleGenerateVideo}

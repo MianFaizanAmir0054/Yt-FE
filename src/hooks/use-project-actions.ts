@@ -6,6 +6,7 @@ import {
   useGenerateResearchMutation,
   useUploadVoiceoverMutation,
   useGenerateImagesMutation,
+  useGenerateSceneVideosMutation,
   useGenerateVideoMutation,
 } from "@/lib/store/api/projectsApi";
 
@@ -19,6 +20,7 @@ interface UseProjectActionsReturn {
   handleResearch: (options?: { duration?: string; tone?: string }) => Promise<void>;
   handleVoiceoverUpload: (file: File) => Promise<void>;
   handleGenerateImages: (options?: { provider?: "pexels" | "segmind"; styleGuide?: string }) => Promise<void>;
+  handleGenerateSceneVideos: (options?: { resolution?: "480p" | "720p" }) => Promise<void>;
   handleGenerateVideo: (options?: { subtitleStyle?: unknown }) => Promise<void>;
   setError: (error: string) => void;
 }
@@ -33,6 +35,7 @@ export function useProjectActions(projectId: string): UseProjectActionsReturn {
   const [generateResearch] = useGenerateResearchMutation();
   const [uploadVoiceover] = useUploadVoiceoverMutation();
   const [generateImages] = useGenerateImagesMutation();
+  const [generateSceneVideos] = useGenerateSceneVideosMutation();
   const [generateVideo] = useGenerateVideoMutation();
 
   const clearVideoProgressTimer = useCallback(() => {
@@ -128,6 +131,31 @@ export function useProjectActions(projectId: string): UseProjectActionsReturn {
     [projectId, generateImages, refetch]
   );
 
+  const handleGenerateSceneVideos = useCallback(
+    async (options?: { resolution?: "480p" | "720p" }) => {
+      setActionLoading("scene-videos");
+      setError("");
+      startVideoProgress();
+
+      try {
+        await generateSceneVideos({
+          id: projectId,
+          resolution: options?.resolution || "480p",
+        }).unwrap();
+        clearVideoProgressTimer();
+        setVideoProgress(100);
+        await refetch();
+      } catch (err: any) {
+        clearVideoProgressTimer();
+        setVideoProgress(0);
+        setError(err?.data?.error || err?.message || "Scene video generation failed");
+      } finally {
+        setActionLoading(null);
+      }
+    },
+    [projectId, generateSceneVideos, refetch, clearVideoProgressTimer, startVideoProgress]
+  );
+
   const handleGenerateVideo = useCallback(
     async (options?: { subtitleStyle?: unknown }) => {
       setActionLoading("video");
@@ -163,6 +191,7 @@ export function useProjectActions(projectId: string): UseProjectActionsReturn {
     handleResearch,
     handleVoiceoverUpload,
     handleGenerateImages,
+    handleGenerateSceneVideos,
     handleGenerateVideo,
     setError,
   };
